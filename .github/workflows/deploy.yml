@@ -1,14 +1,45 @@
-name: Deploy csvconsumer
+name: CI / CD — csvconsumer
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
-  deploy:
-    name: SSH Deploy to Azure Linux
+  # ─────────────────────────────────────────────
+  # JOB 1: Verificación de compilación (CI)
+  # Corre en cada push y en cada Pull Request.
+  # Si el código no compila, el deploy no ocurre.
+  # ─────────────────────────────────────────────
+  build:
+    name: Build & Verify (Go 1.25)
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Go 1.25
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Descargar dependencias
+        run: go mod download
+
+      - name: Compilar para Linux
+        run: CGO_ENABLED=0 GOOS=linux go build -o /dev/null ./...
+
+  # ─────────────────────────────────────────────
+  # JOB 2: Deploy automático al servidor (CD)
+  # Solo corre en push a main (no en PRs).
+  # Requiere que el job "build" haya pasado.
+  # ─────────────────────────────────────────────
+  deploy:
+    name: Deploy → Azure Linux
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Deploy via SSH
@@ -20,6 +51,6 @@ jobs:
           script: |
             cd ~/csvconsumer
             git pull origin main
-            docker-compose down
-            docker-compose up -d --build
-            docker-compose ps
+            sudo docker compose down
+            sudo docker compose up -d --build
+            sudo docker compose ps
