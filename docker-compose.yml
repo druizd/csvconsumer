@@ -3,12 +3,17 @@ services:
 
   rabbitmq:
     image: rabbitmq:3-management
+    entrypoint: ["/bin/bash", "/certs/init-certs.sh"]
     environment:
-      RABBITMQ_DEFAULT_USER: shipper
-      RABBITMQ_DEFAULT_PASS: shipper123
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-shipper}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
     ports:
-      - "5672:5672"    # AMQP — usado por el shipper Windows y el consumer
+      - "5671:5671"    # AMQPS (TLS) — usado por csvshipper-win
+      - "5672:5672"    # AMQP sin TLS — solo para consumer interno (localhost)
       - "15672:15672"  # Management UI — http://<IP>:15672
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./certs:/certs
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
@@ -19,14 +24,14 @@ services:
   consumer:
     build: .
     environment:
-      # Apunta a localhost porque ambos servicios usan network_mode host
-      RABBITMQ_URL: "amqp://shipper:shipper123@localhost:5672/"
-      # La DB (db-infra) también corre en el mismo host Linux
-      DATABASE_URL: "postgres://postgres:postgres123@localhost:5432/logmetrics?sslmode=disable"
-      PORT: "8080"
-    # network_mode host permite alcanzar tanto RabbitMQ como la DB en el host
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      DATABASE_URL: ${DATABASE_URL}
+      PORT: ${PORT:-8080}
     network_mode: "host"
     restart: unless-stopped
     depends_on:
       rabbitmq:
         condition: service_healthy
+
+volumes:
+  rabbitmq_data:
