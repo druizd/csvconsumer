@@ -1,13 +1,32 @@
-version: '3.8'
 
 services:
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: shipper
+      RABBITMQ_DEFAULT_PASS: shipper123
+    ports:
+      - "5672:5672"    # AMQP — usado por el shipper Windows y el consumer
+      - "15672:15672"  # Management UI — http://<IP>:15672
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   consumer:
     build: .
     environment:
-      RABBITMQ_URL: "amqp://shipper:shipper123@13.86.114.224:5672/"
-      # As the database is in another docker, we connect using localhost or the host's LAN IP
+      # Apunta a localhost porque ambos servicios usan network_mode host
+      RABBITMQ_URL: "amqp://shipper:shipper123@localhost:5672/"
+      # La DB (db-infra) también corre en el mismo host Linux
       DATABASE_URL: "postgres://postgres:postgres123@localhost:5432/logmetrics?sslmode=disable"
       PORT: "8080"
-    # network_mode host allows reaching the DB port exported on the linux host
+    # network_mode host permite alcanzar tanto RabbitMQ como la DB en el host
     network_mode: "host"
     restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
