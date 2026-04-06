@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  consumer:
+    build: .
+    environment:
+      RABBITMQ_URL: "amqp://shipper:shipper123@13.86.114.224:5672/"
+      # As the database is in another docker, we connect using localhost or the host's LAN IP
+      DATABASE_URL: "postgres://postgres:postgres123@localhost:5432/logmetrics?sslmode=disable"
+      PORT: "8080"
+    # network_mode host allows reaching the DB port exported on the linux host
+    network_mode: "host"
+    restart: unless-stopped
